@@ -446,10 +446,11 @@ export function create(
 								let table =
 									`<tr><th align="left">Prop</th><th align="left">Description</th><th align="left">Default</th></tr>\n`;
 								for (const p of props) {
+									const pDefault = p.default ?? p.tags.find(t => t.name === 'default')?.text;
 									table += `<tr>
 											<td>${printName(p, modelProps.has(p))}</td>
 											<td>${printDescription(p)}</td>
-											<td>${p.default ? `<code>${p.default}</code>` : ''}</td>
+											<td>${pDefault ? `<code>${pDefault}</code>` : ''}</td>
 										</tr>\n`;
 								}
 								tableContents.push(table);

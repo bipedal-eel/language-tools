@@ -1,6 +1,7 @@
 import * as CompilerDOM from '@vue/compiler-dom';
 import { camelize, capitalize } from '@vue/shared';
 import type * as ts from 'typescript';
+import { getUnwrappedExpression } from '../../parsers/utils';
 import type { Code, VueCodeInformation } from '../../types';
 import { codeFeatures } from '../codeFeatures';
 import { names } from '../names';
@@ -168,6 +169,9 @@ export function* generateEventExpression(
 			const endScope = ctx.startScope();
 			ctx.declare('$event');
 			yield* ctx.generateConditionGuards();
+			if (isSingleExpression(options.typescript, ast)) {
+				yield `return `;
+			}
 			yield* interpolation;
 			yield endOfLine;
 			yield* endScope();
@@ -220,36 +224,35 @@ export function* generateModelEventExpression(
 }
 
 export function isCompoundExpression(ts: typeof import('typescript'), ast: ts.SourceFile) {
-	let result = true;
 	if (ast.statements.length === 0) {
-		result = false;
+		return false;
 	}
-	else if (ast.statements.length === 1) {
-		ts.forEachChild(ast, child_1 => {
-			if (ts.isExpressionStatement(child_1)) {
-				ts.forEachChild(child_1, child_2 => {
-					if (ts.isArrowFunction(child_2)) {
-						result = false;
-					}
-					else if (isPropertyAccessOrId(ts, child_2)) {
-						result = false;
-					}
-				});
+	if (ast.statements.length === 1 && ast.text[ast.endOfFileToken.pos - 1] !== ';') {
+		const statement = ast.statements[0]!;
+		if (ts.isExpressionStatement(statement)) {
+			const node = getUnwrappedExpression(ts, statement.expression);
+			if (
+				ts.isArrowFunction(node)
+				|| ts.isIdentifier(node)
+				|| ts.isElementAccessExpression(node)
+				|| ts.isPropertyAccessExpression(node)
+			) {
+				return false;
 			}
-			else if (ts.isFunctionDeclaration(child_1)) {
-				result = false;
-			}
-		});
+		}
+		else if (ts.isFunctionDeclaration(statement)) {
+			return false;
+		}
 	}
-	return result;
+	return true;
 }
 
-function isPropertyAccessOrId(ts: typeof import('typescript'), node: ts.Node) {
-	if (ts.isIdentifier(node)) {
-		return true;
-	}
-	if (ts.isPropertyAccessExpression(node)) {
-		return isPropertyAccessOrId(ts, node.expression);
+function isSingleExpression(ts: typeof import('typescript'), ast: ts.SourceFile) {
+	if (ast.statements.length === 1 && ast.text[ast.endOfFileToken.pos - 1] !== ';') {
+		const statement = ast.statements[0]!;
+		if (ts.isExpressionStatement(statement)) {
+			return true;
+		}
 	}
 	return false;
 }
